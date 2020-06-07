@@ -123,9 +123,9 @@ extension ViewController {
 
     func setupVideo() {
         let bundleURL = Bundle.main.resourceURL!
-        let movieURL = URL(string:"sample2.mp4", relativeTo:bundleURL)!
+        let movieURL = URL(string: "bunny.mp4", relativeTo: bundleURL)!
         do {
-            let videoLoader = try MetalVideoLoader(url: movieURL)
+            let videoLoader = try MetalVideoLoader(url: movieURL, useAudio: true)
             videoCompositor.sourceTextureKey = videoLoader.textureKey
             videoLoader-->videoCompositor
             video = videoLoader

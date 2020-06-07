@@ -8,31 +8,35 @@
 import Foundation
 import AVFoundation
 
-public class MetalVideoLoader: OperationChain {
+public class MetalVideoLoader: OperationChain, AudioOperationChain {
     public let textureKey: String
     public var targets = TargetContainer<OperationChain>()
+    public var audioTargets = TargetContainer<AudioOperationChain>()
 
     private let asset: AVAsset
     private var assetReader: AVAssetReader!
     private var videoTrackOutput: AVAssetReaderTrackOutput?
+    private var audioTrackOutput: AVAssetReaderTrackOutput?
     private let loop: Bool
     private let playAtActualSpeed: Bool
+    private let useAudio: Bool
 
     private var previousFrameTime = kCMTimeZero
     private var previousActualFrameTime = CFAbsoluteTimeGetCurrent()
 
     private var videoTextureCache: CVMetalTextureCache?
 
-    public convenience init(url: URL, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video") throws {
+    public convenience init(url: URL, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video", useAudio: Bool = false) throws {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
-        try self.init(asset: asset, playAtActualSpeed: playAtActualSpeed, loop: loop)
+        try self.init(asset: asset, playAtActualSpeed: playAtActualSpeed, loop: loop, useAudio: useAudio)
     }
 
-    public init(asset: AVAsset, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video") throws {
+    public init(asset: AVAsset, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video", useAudio: Bool = false) throws {
         self.asset = asset
         self.loop = loop
         self.playAtActualSpeed = playAtActualSpeed
         self.textureKey = textureKey
+        self.useAudio = useAudio
 
         let _ = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, sharedMetalRenderingDevice.device, nil, &videoTextureCache)
         try createAssetReader()
@@ -50,6 +54,16 @@ public class MetalVideoLoader: OperationChain {
             self.videoTrackOutput = videoTrackOutput
         } else {
             self.videoTrackOutput = nil
+        }
+
+        guard useAudio else { return }
+
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            let audioTrackOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: [AVFormatIDKey: Int(kAudioFormatLinearPCM)])
+            assetReader.add(audioTrackOutput)
+            self.audioTrackOutput = audioTrackOutput
+        } else {
+            self.audioTrackOutput = nil
         }
     }
 
@@ -83,6 +97,9 @@ public class MetalVideoLoader: OperationChain {
         while assetReader.status == .reading {
             if let videoTrackOutput = videoTrackOutput {
                 readNextVideoFrame(from: videoTrackOutput)
+            }
+            if let audioTrackOutput = audioTrackOutput {
+                readNextAudioFrame(from: audioTrackOutput)
             }
         }
 
@@ -126,6 +143,15 @@ public class MetalVideoLoader: OperationChain {
         }
     }
 
+    private func readNextAudioFrame(from audioTrackOutput: AVAssetReaderOutput) {
+        guard assetReader.status == .reading else { return }
+
+        if let sampleBuffer = audioTrackOutput.copyNextSampleBuffer() {
+            audioOperationFinished(sampleBuffer)
+            CMSampleBufferInvalidate(sampleBuffer)
+        }
+    }
+
     private func process(_ frame:CMSampleBuffer) {
         guard let videoTextureCache = videoTextureCache else { return }
 
@@ -154,8 +180,7 @@ public class MetalVideoLoader: OperationChain {
         }
     }
 
-    public func newTextureAvailable(_ texture: Texture) {
-
-    }
+    public func newTextureAvailable(_ texture: Texture) {}
+    public func newAudioAvailable(_ sampleBuffer: CMSampleBuffer) {}
 }
 
