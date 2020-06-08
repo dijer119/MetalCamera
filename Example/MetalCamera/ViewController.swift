@@ -18,6 +18,7 @@ class ViewController: UIViewController {
     var camera: MetalCamera!
     var video: MetalVideoLoader?
     var videoCompositor: ImageCompositor!
+    var audioCompositor: AudioCompositor!
     var recorder: MetalVideoWriter?
 
     let useMic = true
@@ -33,6 +34,16 @@ class ViewController: UIViewController {
         // Do any additional setup after loading the view, typically from a nib.
         setupCamera()
         setupVideo()
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setActive(false)
+            try audioSession.setCategory(.playAndRecord, options: .defaultToSpeaker)
+            try audioSession.setMode(.videoChat)
+            try audioSession.setActive(true)
+        } catch {
+            debugPrint(error)
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -52,7 +63,7 @@ class ViewController: UIViewController {
             preview.removeTarget(recorder)
 
             if useMic {
-                camera.removeAudioTarget(recorder)
+                audioCompositor.removeAudioTarget(recorder)
             }
 
             recorder.finishRecording { [weak self] in
@@ -82,7 +93,7 @@ class ViewController: UIViewController {
                     preview-->recorder
 
                     if useMic {
-                        camera==>recorder
+                        audioCompositor==>recorder
                     }
 
                     recorder.startRecording()
@@ -119,6 +130,9 @@ extension ViewController {
 
         camera-->rotation90-->gray-->imageCompositor-->videoCompositor-->preview
         self.camera = camera
+
+        audioCompositor = AudioCompositor(camera.sourceKey)
+        camera==>audioCompositor
     }
 
     func setupVideo() {
@@ -128,6 +142,7 @@ extension ViewController {
             let videoLoader = try MetalVideoLoader(url: movieURL, useAudio: true)
             videoCompositor.sourceTextureKey = videoLoader.sourceKey
             videoLoader-->videoCompositor
+            videoLoader==>audioCompositor
             video = videoLoader
         } catch {
             debugPrint(error)
