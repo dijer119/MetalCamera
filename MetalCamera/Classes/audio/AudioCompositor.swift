@@ -13,6 +13,7 @@ public class AudioCompositor: AudioOperationChain {
     public let mainSourceKey: String
     public var preservedBuffer: AudioBuffer?
 
+
     public init(_ mainSourceKey: String) {
         self.mainSourceKey = mainSourceKey
     }
@@ -41,12 +42,5 @@ public class AudioCompositor: AudioOperationChain {
         guard status == noErr else { return }
         let data = Data(bytes: blockBufferData, count: blockBufferDataLength)
 
-        do {
-            let player = try AVAudioPlayer(data: data)
-            player.prepareToPlay()
-            player.play()
-        } catch {
-            debugPrint(error)
-        }
     }
 }
