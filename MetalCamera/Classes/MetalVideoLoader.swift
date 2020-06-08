@@ -9,7 +9,7 @@ import Foundation
 import AVFoundation
 
 public class MetalVideoLoader: OperationChain, AudioOperationChain {
-    public let textureKey: String
+    public let sourceKey: String
     public var targets = TargetContainer<OperationChain>()
     public var audioTargets = TargetContainer<AudioOperationChain>()
 
@@ -26,16 +26,16 @@ public class MetalVideoLoader: OperationChain, AudioOperationChain {
 
     private var videoTextureCache: CVMetalTextureCache?
 
-    public convenience init(url: URL, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video", useAudio: Bool = false) throws {
+    public convenience init(url: URL, playAtActualSpeed: Bool = true, loop: Bool = true, sourceKey: String = "video", useAudio: Bool = false) throws {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         try self.init(asset: asset, playAtActualSpeed: playAtActualSpeed, loop: loop, useAudio: useAudio)
     }
 
-    public init(asset: AVAsset, playAtActualSpeed: Bool = true, loop: Bool = true, textureKey: String = "video", useAudio: Bool = false) throws {
+    public init(asset: AVAsset, playAtActualSpeed: Bool = true, loop: Bool = true, sourceKey: String = "video", useAudio: Bool = false) throws {
         self.asset = asset
         self.loop = loop
         self.playAtActualSpeed = playAtActualSpeed
-        self.textureKey = textureKey
+        self.sourceKey = sourceKey
         self.useAudio = useAudio
 
         let _ = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, sharedMetalRenderingDevice.device, nil, &videoTextureCache)
@@ -138,6 +138,7 @@ public class MetalVideoLoader: OperationChain, AudioOperationChain {
                 previousActualFrameTime = CFAbsoluteTimeGetCurrent()
             }
 
+            debugPrint("Read Video frame")
             process(sampleBuffer)
             CMSampleBufferInvalidate(sampleBuffer)
         }
@@ -147,7 +148,8 @@ public class MetalVideoLoader: OperationChain, AudioOperationChain {
         guard assetReader.status == .reading else { return }
 
         if let sampleBuffer = audioTrackOutput.copyNextSampleBuffer() {
-            audioOperationFinished(sampleBuffer)
+            debugPrint("Read Audio frame")
+            audioOperationFinished(AudioBuffer(sampleBuffer, sourceKey))
             CMSampleBufferInvalidate(sampleBuffer)
         }
     }
@@ -168,7 +170,7 @@ public class MetalVideoLoader: OperationChain, AudioOperationChain {
         let _ = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, videoTextureCache, movieFrame, nil, .bgra8Unorm, bufferWidth, bufferHeight, 0, &textureRef)
         if let concreteTexture = textureRef,
             let cameraTexture = CVMetalTextureGetTexture(concreteTexture) {
-            texture = Texture(texture: cameraTexture, timestamp: currentSampleTime, textureKey: self.textureKey)
+            texture = Texture(texture: cameraTexture, timestamp: currentSampleTime, textureKey: self.sourceKey)
         } else {
             texture = nil
         }
@@ -181,6 +183,6 @@ public class MetalVideoLoader: OperationChain, AudioOperationChain {
     }
 
     public func newTextureAvailable(_ texture: Texture) {}
-    public func newAudioAvailable(_ sampleBuffer: CMSampleBuffer) {}
+    public func newAudioAvailable(_ sampleBuffer: AudioBuffer) {}
 }
 
